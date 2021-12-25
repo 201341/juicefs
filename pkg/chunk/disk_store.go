@@ -96,19 +96,19 @@ func NewDiskStore(dir string) ChunkStore {
 	return &diskStore{dir}
 }
 
-func (s *diskStore) NewReader(chunkid uint64, length int) Reader {
+func (s *diskStore) NewReader(uid, chunkid uint64, length int) Reader {
 	return &diskFile{chunkid, s.chunkPath(chunkid)}
 }
 
-func (s *diskStore) NewWriter(chunkid uint64) Writer {
+func (s *diskStore) NewWriter(uid, chunkid uint64) Writer {
 	return &diskFile{chunkid, s.chunkPath(chunkid)}
 }
 
-func (s *diskStore) Remove(chunkid uint64, length int) error {
+func (s *diskStore) Remove(uid, chunkid uint64, length int) error {
 	return os.Remove(s.chunkPath(chunkid))
 }
 
-func (s *diskStore) FillCache(chunkid uint64, length uint32) error {
+func (s *diskStore) FillCache(uid, chunkid uint64, length uint32) error {
 	return fmt.Errorf("Not Supported")
 }
 

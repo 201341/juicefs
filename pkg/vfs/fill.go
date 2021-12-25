@@ -29,6 +29,7 @@ import (
 type _file struct {
 	ino  Ino
 	size uint64
+	uid  uint64
 }
 
 func (v *VFS) fillCache(paths []string, concurrent int) {
@@ -44,7 +45,7 @@ func (v *VFS) fillCache(paths []string, concurrent int) {
 				if f.ino == 0 {
 					break
 				}
-				err := v.fillInode(f.ino, f.size)
+				err := v.fillInode(f.ino, f.size, f.uid)
 				if err != nil { // TODO: print path instead of inode
 					logger.Errorf("Inode %d could be corrupted: %s", f.ino, err)
 				}
@@ -64,7 +65,7 @@ func (v *VFS) fillCache(paths []string, concurrent int) {
 		if attr.Typ == meta.TypeDirectory {
 			v.walkDir(inode, todo)
 		} else if attr.Typ == meta.TypeFile {
-			todo <- _file{inode, attr.Length}
+			todo <- _file{inode, attr.Length, uint64(attr.Uid)}
 		}
 	}
 	close(todo)
@@ -145,7 +146,7 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 				if f.Attr.Typ == meta.TypeDirectory {
 					pending = append(pending, f.Inode)
 				} else if f.Attr.Typ != meta.TypeSymlink {
-					todo <- _file{f.Inode, f.Attr.Length}
+					todo <- _file{f.Inode, f.Attr.Length, uint64(f.Attr.Uid)}
 				}
 			}
 		} else {
@@ -154,14 +155,14 @@ func (v *VFS) walkDir(inode Ino, todo chan _file) {
 	}
 }
 
-func (v *VFS) fillInode(inode Ino, size uint64) error {
+func (v *VFS) fillInode(inode Ino, size, uid uint64) error {
 	var slices []meta.Slice
 	for indx := uint64(0); indx*meta.ChunkSize < size; indx++ {
 		if st := v.Meta.Read(meta.Background, inode, uint32(indx), &slices); st != 0 {
 			return fmt.Errorf("Failed to get slices of inode %d index %d: %d", inode, indx, st)
 		}
 		for _, s := range slices {
-			if err := v.Store.FillCache(s.Chunkid, s.Size); err != nil {
+			if err := v.Store.FillCache(uid, s.Chunkid, s.Size); err != nil {
 				return fmt.Errorf("Failed to cache inode %d slice %d: %s", inode, s.Chunkid, err)
 			}
 		}

@@ -111,7 +111,7 @@ func gc(ctx *cli.Context) error {
 	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
 		length := args[1].(uint32)
-		return store.Remove(chunkid, int(length))
+		return store.Remove(0, chunkid, int(length))
 	}))
 	if ctx.Bool("compact") {
 		var nc, ns, nb int
@@ -119,7 +119,7 @@ func gc(ctx *cli.Context) error {
 		m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
 			slices := args[0].([]meta.Slice)
 			chunkid := args[1].(uint64)
-			err = vfs.Compact(chunkConf, store, slices, chunkid)
+			err = vfs.Compact(chunkConf, store, slices, 0, chunkid)
 			nc++
 			for _, s := range slices {
 				ns++

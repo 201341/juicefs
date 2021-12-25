@@ -66,7 +66,7 @@ func (m sstate) String() string {
 }
 
 type FileReader interface {
-	Read(ctx meta.Context, off uint64, buf []byte) (int, syscall.Errno)
+	Read(ctx meta.Context, uid, off uint64, buf []byte) (int, syscall.Errno)
 	Close(ctx meta.Context)
 }
 
@@ -203,7 +203,7 @@ func (s *sliceReader) run() {
 	defer p.Release()
 	var n int
 	ctx := context.TODO()
-	n = f.r.Read(ctx, p, chunks, (uint32(s.block.off))%meta.ChunkSize)
+	n = f.r.Read(ctx, p, chunks, s.file.uid, (uint32(s.block.off))%meta.ChunkSize)
 
 	f.Lock()
 	if s.state != BUSY || f.shouldStop() {
@@ -280,6 +280,7 @@ type session struct {
 
 type fileReader struct {
 	// protected by itself
+	uid      uint64
 	inode    Ino
 	length   uint64
 	err      syscall.Errno
@@ -606,7 +607,7 @@ func (f *fileReader) waitForIO(ctx meta.Context, reqs []*req, buf []byte) (int, 
 	return n, 0
 }
 
-func (f *fileReader) Read(ctx meta.Context, offset uint64, buf []byte) (int, syscall.Errno) {
+func (f *fileReader) Read(ctx meta.Context, uid, offset uint64, buf []byte) (int, syscall.Errno) {
 	f.Lock()
 	defer f.Unlock()
 	f.acquire()
@@ -778,7 +779,7 @@ func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
 	})
 }
 
-func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {
+func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, uid uint64, off int) error {
 	buf := page.Data
 	read := 0
 	if s.Chunkid == 0 {
@@ -789,7 +790,7 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 		return nil
 	}
 
-	reader := r.store.NewReader(s.Chunkid, int(s.Size))
+	reader := r.store.NewReader(uid, s.Chunkid, int(s.Size))
 	for read < len(buf) {
 		p := page.Slice(read, len(buf)-read)
 		n, err := reader.ReadAt(ctx, p, off+int(s.Off))
@@ -805,9 +806,9 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 	return nil
 }
 
-func (r *dataReader) Read(ctx context.Context, page *chunk.Page, chunks []meta.Slice, offset uint32) int {
+func (r *dataReader) Read(ctx context.Context, page *chunk.Page, chunks []meta.Slice, uid uint64, offset uint32) int {
 	if len(chunks) > 16 {
-		return r.readManyChunks(ctx, page, chunks, offset)
+		return r.readManyChunks(ctx, page, chunks, uid, offset)
 	}
 	read := 0
 	var pos uint32
@@ -820,7 +821,7 @@ func (r *dataReader) Read(ctx context.Context, page *chunk.Page, chunks []meta.S
 			toread := utils.Min(int(size-read), int(pos+chunks[i].Len-offset))
 			go func(s *meta.Slice, p *chunk.Page, off, pos uint32) {
 				defer p.Release()
-				errs <- r.readSlice(ctx, s, p, int(off))
+				errs <- r.readSlice(ctx, s, p, uid, int(off))
 			}(&chunks[i], page.Slice(read, toread), offset-pos, pos)
 			read += toread
 			offset += uint32(toread)
@@ -846,7 +847,7 @@ func (r *dataReader) Read(ctx context.Context, page *chunk.Page, chunks []meta.S
 	return read
 }
 
-func (r *dataReader) readManyChunks(ctx context.Context, page *chunk.Page, chunks []meta.Slice, offset uint32) int {
+func (r *dataReader) readManyChunks(ctx context.Context, page *chunk.Page, chunks []meta.Slice, uid uint64, offset uint32) int {
 	read := 0
 	var pos uint32
 	var err error
@@ -875,7 +876,7 @@ CHUNKS:
 			}
 			go func(s *meta.Slice, p *chunk.Page, off int, pos uint32) {
 				defer p.Release()
-				errs <- r.readSlice(ctx, s, p, off)
+				errs <- r.readSlice(ctx, s, p, uid, off)
 				<-concurrency
 			}(&chunks[i], page.Slice(read, toread), int(offset-pos), pos)
 

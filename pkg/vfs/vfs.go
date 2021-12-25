@@ -476,7 +476,7 @@ func (v *VFS) Release(ctx Context, ino Ino, fh uint64) {
 	}
 }
 
-func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n int, err syscall.Errno) {
+func (v *VFS) Read(ctx Context, uid uint64, ino Ino, buf []byte, off uint64, fh uint64) (n int, err syscall.Errno) {
 	size := uint32(len(buf))
 	if IsSpecialNode(ino) {
 		if ino == logInode {
@@ -533,9 +533,9 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	defer h.Runlock()
 
 	v.writer.Flush(ctx, ino)
-	n, err = h.reader.Read(ctx, off, buf)
+	n, err = h.reader.Read(ctx, uid, off, buf)
 	for err == syscall.EAGAIN {
-		n, err = h.reader.Read(ctx, off, buf)
+		n, err = h.reader.Read(ctx, uid, off, buf)
 	}
 	if err == syscall.ENOENT {
 		err = syscall.EBADF
@@ -544,7 +544,7 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 	return
 }
 
-func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno) {
+func (v *VFS) Write(ctx Context, uid uint64, ino Ino, buf []byte, off, fh uint64) (err syscall.Errno) {
 	size := uint64(len(buf))
 	defer func() { logit(ctx, "write (%d,%d,%d): %s", ino, size, off, strerr(err)) }()
 	h := v.findHandle(ino, fh)
@@ -588,7 +588,7 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	}
 	defer h.Wunlock()
 
-	err = h.writer.Write(ctx, off, buf)
+	err = h.writer.Write(ctx, uid, off, buf)
 	if err == syscall.ENOENT || err == syscall.EPERM || err == syscall.EINVAL {
 		err = syscall.EBADF
 	}

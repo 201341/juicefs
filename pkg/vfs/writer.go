@@ -32,7 +32,7 @@ const (
 )
 
 type FileWriter interface {
-	Write(ctx meta.Context, offset uint64, data []byte) syscall.Errno
+	Write(ctx meta.Context, uid, offset uint64, data []byte) syscall.Errno
 	Flush(ctx meta.Context) syscall.Errno
 	Close(ctx meta.Context) syscall.Errno
 	GetLength() uint64
@@ -121,7 +121,7 @@ func (s *sliceWriter) flushData() {
 }
 
 // protected by s.chunk.file
-func (s *sliceWriter) write(ctx meta.Context, off uint32, data []uint8) syscall.Errno {
+func (s *sliceWriter) write(ctx meta.Context, uid uint64, off uint32, data []uint8) syscall.Errno {
 	f := s.chunk.file
 	_, err := s.writer.WriteAt(data, int64(off))
 	if err != nil {
@@ -250,14 +250,14 @@ func (f *fileWriter) freeChunk(c *chunkWriter) {
 }
 
 // protected by file
-func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data []byte) syscall.Errno {
+func (f *fileWriter) writeChunk(ctx meta.Context, uid uint64, indx uint32, off uint32, data []byte) syscall.Errno {
 	c := f.findChunk(indx)
 	s := c.findWritableSlice(off, uint32(len(data)))
 	if s == nil {
 		s = &sliceWriter{
 			chunk:   c,
 			off:     off,
-			writer:  f.w.store.NewWriter(0),
+			writer:  f.w.store.NewWriter(uid, 0),
 			notify:  utils.NewCond(&f.Mutex),
 			started: time.Now(),
 		}
@@ -269,7 +269,7 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 			go c.commitThread()
 		}
 	}
-	return s.write(ctx, off-s.off, data)
+	return s.write(ctx, uid, off-s.off, data)
 }
 
 func (f *fileWriter) totalSlices() int {
@@ -286,7 +286,7 @@ func (w *dataWriter) usedBufferSize() int64 {
 	return utils.AllocMemory() - w.store.UsedMemory()
 }
 
-func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Errno {
+func (f *fileWriter) Write(ctx meta.Context, uid, off uint64, data []byte) syscall.Errno {
 	for {
 		if f.totalSlices() < 1000 {
 			break
@@ -322,7 +322,7 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 		if pos+n > meta.ChunkSize {
 			n = meta.ChunkSize - pos
 		}
-		if st := f.writeChunk(ctx, indx, pos, data[:n]); st != 0 {
+		if st := f.writeChunk(ctx, uid, indx, pos, data[:n]); st != 0 {
 			return st
 		}
 		data = data[n:]

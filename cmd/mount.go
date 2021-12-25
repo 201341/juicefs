@@ -224,12 +224,12 @@ func mount(c *cli.Context) error {
 	m.OnMsg(meta.DeleteChunk, meta.MsgCallback(func(args ...interface{}) error {
 		chunkid := args[0].(uint64)
 		length := args[1].(uint32)
-		return store.Remove(chunkid, int(length))
+		return store.Remove(0, chunkid, int(length))
 	}))
 	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
 		slices := args[0].([]meta.Slice)
 		chunkid := args[1].(uint64)
-		return vfs.Compact(chunkConf, store, slices, chunkid)
+		return vfs.Compact(chunkConf, store, slices, 0, chunkid)
 	}))
 	conf := &vfs.Config{
 		Meta:       metaConf,

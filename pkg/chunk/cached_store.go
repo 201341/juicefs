@@ -102,12 +102,13 @@ var (
 // chunk for read only
 type rChunk struct {
 	id     uint64
+	uid    uint64
 	length int
 	store  *cachedStore
 }
 
-func chunkForRead(id uint64, length int, store *cachedStore) *rChunk {
-	return &rChunk{id, length, store}
+func chunkForRead(uid, id uint64, length int, store *cachedStore) *rChunk {
+	return &rChunk{uid, id, length, store}
 }
 
 func (c *rChunk) blockSize(indx int) int {
@@ -120,9 +121,9 @@ func (c *rChunk) blockSize(indx int) int {
 
 func (c *rChunk) key(indx int) string {
 	if c.store.conf.Partitions > 1 {
-		return fmt.Sprintf("chunks/%02X/%v/%v_%v_%v", c.id%256, c.id/1000/1000, c.id, indx, c.blockSize(indx))
+		return fmt.Sprintf("%v/chunks/%02X/%v/%v_%v_%v", c.uid, c.id%256, c.id/1000/1000, c.id, indx, c.blockSize(indx))
 	}
-	return fmt.Sprintf("chunks/%v/%v/%v_%v_%v", c.id/1000/1000, c.id/1000, c.id, indx, c.blockSize(indx))
+	return fmt.Sprintf("%v/chunks/%v/%v/%v_%v_%v", c.uid, c.id/1000/1000, c.id/1000, c.id, indx, c.blockSize(indx))
 }
 
 func (c *rChunk) index(off int) int {
@@ -322,9 +323,9 @@ type wChunk struct {
 	pendings    int
 }
 
-func chunkForWrite(id uint64, store *cachedStore) *wChunk {
+func chunkForWrite(uid, id uint64, store *cachedStore) *wChunk {
 	return &wChunk{
-		rChunk: rChunk{id, 0, store},
+		rChunk: rChunk{uid, id, 0, store},
 		pages:  make([][]*Page, chunkSize/store.conf.BlockSize),
 		errors: make(chan error, chunkSize/store.conf.BlockSize),
 	}
@@ -902,21 +903,21 @@ func (store *cachedStore) uploadDelayedStaging() {
 	store.pendingMutex.Unlock()
 }
 
-func (store *cachedStore) NewReader(chunkid uint64, length int) Reader {
-	return chunkForRead(chunkid, length, store)
+func (store *cachedStore) NewReader(uid, chunkid uint64, length int) Reader {
+	return chunkForRead(uid, chunkid, length, store)
 }
 
-func (store *cachedStore) NewWriter(chunkid uint64) Writer {
-	return chunkForWrite(chunkid, store)
+func (store *cachedStore) NewWriter(uid, chunkid uint64) Writer {
+	return chunkForWrite(uid, chunkid, store)
 }
 
-func (store *cachedStore) Remove(chunkid uint64, length int) error {
-	r := chunkForRead(chunkid, length, store)
+func (store *cachedStore) Remove(uid, chunkid uint64, length int) error {
+	r := chunkForRead(uid, chunkid, length, store)
 	return r.Remove()
 }
 
-func (store *cachedStore) FillCache(chunkid uint64, length uint32) error {
-	r := chunkForRead(chunkid, int(length), store)
+func (store *cachedStore) FillCache(uid, chunkid uint64, length uint32) error {
+	r := chunkForRead(uid, chunkid, int(length), store)
 	keys := r.keys()
 	var err error
 	for _, k := range keys {

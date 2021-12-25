@@ -244,7 +244,7 @@ func (fs *fileSystem) Open(cancel <-chan struct{}, in *fuse.OpenIn, out *fuse.Op
 func (fs *fileSystem) Read(cancel <-chan struct{}, in *fuse.ReadIn, buf []byte) (fuse.ReadResult, fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	n, err := fs.v.Read(ctx, Ino(in.NodeId), buf, in.Offset, in.Fh)
+	n, err := fs.v.Read(ctx, uint64(in.Uid), Ino(in.NodeId), buf, in.Offset, in.Fh)
 	if err != 0 {
 		return nil, fuse.Status(err)
 	}
@@ -260,7 +260,7 @@ func (fs *fileSystem) Release(cancel <-chan struct{}, in *fuse.ReleaseIn) {
 func (fs *fileSystem) Write(cancel <-chan struct{}, in *fuse.WriteIn, data []byte) (written uint32, code fuse.Status) {
 	ctx := newContext(cancel, &in.InHeader)
 	defer releaseContext(ctx)
-	err := fs.v.Write(ctx, Ino(in.NodeId), data, in.Offset, in.Fh)
+	err := fs.v.Write(ctx, uint64(in.Uid), Ino(in.NodeId), data, in.Offset, in.Fh)
 	if err != 0 {
 		return 0, fuse.Status(err)
 	}

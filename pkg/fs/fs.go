@@ -143,7 +143,7 @@ type File struct {
 	inode Ino
 	info  *FileStat
 	fs    *FileSystem
-
+	uid   uint64
 	sync.Mutex
 	flags    uint32
 	offset   int64
@@ -955,9 +955,9 @@ func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 		f.rdata = f.fs.reader.Open(f.inode, uint64(f.info.Size()))
 	}
 
-	got, eno := f.rdata.Read(ctx, uint64(offset), b)
+	got, eno := f.rdata.Read(ctx, f.uid, uint64(offset), b)
 	for eno == syscall.EAGAIN {
-		got, eno = f.rdata.Read(ctx, uint64(offset), b)
+		got, eno = f.rdata.Read(ctx, f.uid, uint64(offset), b)
 	}
 	if eno != 0 {
 		err = eno
@@ -995,7 +995,7 @@ func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 	if f.wdata == nil {
 		f.wdata = f.fs.writer.Open(f.inode, uint64(f.info.Size()))
 	}
-	err = f.wdata.Write(ctx, uint64(offset), b)
+	err = f.wdata.Write(ctx, f.uid, uint64(offset), b)
 	if err != 0 {
 		f.wdata.Close(meta.Background)
 		f.wdata = nil
