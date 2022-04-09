@@ -2327,6 +2327,9 @@ func (m *kvMeta) dumpDir(inode Ino, tree *DumpedEntry, bw *bufio.Writer, depth i
 	for idx, name := range sortedName {
 		entry := entries[name]
 		entry.Name = name
+		if entry.Attr == nil {
+			continue
+		}
 		inode := entry.Attr.Inode
 		err = m.dumpEntry(inode, entry)
 		if err != nil {
